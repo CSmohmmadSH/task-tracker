@@ -50,7 +50,7 @@ A simple task management REST API built to learn Kubernetes, GitOps, and service
 
 
 
-\## Running Locally
+## Running Locally
 
 
 
@@ -68,7 +68,7 @@ Then open `http://localhost:8000/docs` for the interactive API.
 
 
 
-\## Running with Docker
+## Running with Docker
 
 
 
