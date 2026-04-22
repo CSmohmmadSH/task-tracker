@@ -1,4 +1,4 @@
-\# Task Tracker
+# Task Tracker
 
 
 
@@ -6,7 +6,7 @@ A simple task management REST API built to learn Kubernetes, GitOps, and service
 
 
 
-\## Tech Stack
+## Tech Stack
 
 
 
@@ -28,7 +28,7 @@ A simple task management REST API built to learn Kubernetes, GitOps, and service
 
 
 
-\## Endpoints
+## Endpoints
 
 
 
@@ -50,7 +50,7 @@ A simple task management REST API built to learn Kubernetes, GitOps, and service
 
 
 
-\## Running Locally
+## Running Locally
 
 
 
@@ -68,7 +68,7 @@ Then open `http://localhost:8000/docs` for the interactive API.
 
 
 
-\## Running with Docker
+## Running with Docker
 
 
 
@@ -82,7 +82,7 @@ docker run -d -p 8000:8000 task-tracker:v1
 
 
 
-\## Project Status
+## Project Status
 
 
 
