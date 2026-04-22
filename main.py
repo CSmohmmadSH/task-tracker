@@ -1,39 +1,70 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
 from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST
 from fastapi.responses import Response
+from sqlalchemy import create_engine, Column, String, Boolean
+from sqlalchemy.orm import declarative_base, sessionmaker, Session
+from contextlib import asynccontextmanager
 from typing import List
 import os
 import uuid
 
-# Create the FastAPI app
+# ---------- Database setup ----------
+
+DB_HOST = os.environ.get("DB_HOST", "localhost")
+DB_PORT = os.environ.get("DB_PORT", "5432")
+DB_NAME = os.environ.get("DB_NAME", "tasks")
+DB_USER = os.environ.get("DB_USER", "tasks")
+DB_PASSWORD = os.environ.get("DB_PASSWORD", "tasks")
+
+DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+
+class TaskModel(Base):
+    __tablename__ = "tasks"
+    id = Column(String, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    description = Column(String, default="")
+    completed = Column(Boolean, default=False)
+
+
+# ---------- FastAPI app with lifespan ----------
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    Base.metadata.create_all(bind=engine)
+    yield
+
+
 app = FastAPI(
     title="Task Tracker API",
-    description="A simple task manager built for learning Kubernetes",
-    version=os.environ.get("APP_VERSION", "v1")
+    description="A task manager built for learning Kubernetes",
+    version=os.environ.get("APP_VERSION", "v1"),
+    lifespan=lifespan
 )
 
-# Prometheus metrics
-tasks_created_total = Counter(
-    "tasks_created_total",
-    "Total number of tasks created"
-)
-tasks_deleted_total = Counter(
-    "tasks_deleted_total",
-    "Total number of tasks deleted"
-)
-requests_total = Counter(
-    "http_requests_total",
-    "Total HTTP requests",
-    ["endpoint"]
-)
 
-# In-memory "database" — simple dict for now
-# Day 3 replaces this with PostgreSQL
-tasks_db = {}
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 
-# Data models
+# ---------- Prometheus metrics ----------
+
+tasks_created_total = Counter("tasks_created_total", "Total tasks created")
+tasks_deleted_total = Counter("tasks_deleted_total", "Total tasks deleted")
+requests_total = Counter("http_requests_total", "Total requests", ["endpoint"])
+
+
+# ---------- Pydantic models ----------
+
 class TaskCreate(BaseModel):
     title: str
     description: str = ""
@@ -43,10 +74,13 @@ class Task(BaseModel):
     id: str
     title: str
     description: str
-    completed: bool = False
+    completed: bool
+
+    class Config:
+        from_attributes = True
 
 
-# Routes
+# ---------- Routes ----------
 
 @app.get("/")
 def root():
@@ -60,42 +94,44 @@ def root():
 
 @app.get("/health")
 def health():
-    """Kubernetes will hit this to check if the pod is healthy"""
     return {"status": "healthy"}
 
 
 @app.get("/tasks", response_model=List[Task])
-def list_tasks():
+def list_tasks(db: Session = Depends(get_db)):
     requests_total.labels(endpoint="/tasks").inc()
-    return list(tasks_db.values())
+    return db.query(TaskModel).all()
 
 
 @app.post("/tasks", response_model=Task, status_code=201)
-def create_task(task: TaskCreate):
+def create_task(task: TaskCreate, db: Session = Depends(get_db)):
     requests_total.labels(endpoint="/tasks").inc()
     task_id = str(uuid.uuid4())[:8]
-    new_task = Task(
+    db_task = TaskModel(
         id=task_id,
         title=task.title,
         description=task.description,
         completed=False
     )
-    tasks_db[task_id] = new_task
+    db.add(db_task)
+    db.commit()
+    db.refresh(db_task)
     tasks_created_total.inc()
-    return new_task
+    return db_task
 
 
 @app.delete("/tasks/{task_id}", status_code=204)
-def delete_task(task_id: str):
+def delete_task(task_id: str, db: Session = Depends(get_db)):
     requests_total.labels(endpoint="/tasks/{id}").inc()
-    if task_id not in tasks_db:
+    task = db.query(TaskModel).filter(TaskModel.id == task_id).first()
+    if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-    del tasks_db[task_id]
+    db.delete(task)
+    db.commit()
     tasks_deleted_total.inc()
     return None
 
 
 @app.get("/metrics")
 def metrics():
-    """Prometheus scrapes this endpoint to collect metrics"""
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
