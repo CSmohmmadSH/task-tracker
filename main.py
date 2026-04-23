@@ -88,7 +88,7 @@ def root():
     return {
         "app": "Task Tracker",
         "version": os.environ.get("APP_VERSION", "v1"),
-        "message": "Welcome! Try /tasks to see your tasks."
+        "message": "Deployed by ArgoCD from GitHub! 🚀"
     }
 
 
