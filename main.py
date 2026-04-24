@@ -85,10 +85,15 @@ class Task(BaseModel):
 @app.get("/")
 def root():
     requests_total.labels(endpoint="/").inc()
+    version = os.environ.get("APP_VERSION", "v1")
+    messages = {
+        "v1": "🟢 Stable v1 - Hello from production!",
+        "v2": "🔵 NEW v2 - Canary deployment test!"
+    }
     return {
         "app": "Task Tracker",
-        "version": os.environ.get("APP_VERSION", "v1"),
-        "message": "Deployed by ArgoCD from GitHub! 🚀"
+        "version": version,
+        "message": messages.get(version, "Unknown version")
     }
 
 
