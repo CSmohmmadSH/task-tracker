@@ -25,7 +25,7 @@ spec:
   - backendRefs:
     - name: task-tracker-v1
       port: 80
-      weight: 90
+      weight: 50
     - name: task-tracker-v2
       port: 80
-      weight: 10
+      weight: 50
